@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Setup – Bulk Email Center</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f172a; color: #e2e8f0;
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      padding: 2rem 1rem;
+    }
+    .card {
+      background: #1e293b; border: 1px solid #334155; border-radius: 16px;
+      padding: 2.5rem; max-width: 640px; width: 100%;
+    }
+    h1 { font-size: 1.5rem; margin-bottom: 0.5rem; color: #f8fafc; }
+    p  { color: #94a3b8; line-height: 1.65; margin-bottom: 1rem; }
+    ol { padding-left: 1.25rem; color: #94a3b8; line-height: 2; }
+    ol li { margin-bottom: 0.25rem; }
+    code {
+      background: #0f172a; border: 1px solid #334155; border-radius: 4px;
+      padding: 0.1rem 0.4rem; font-size: 0.85rem; color: #a5b4fc;
+    }
+    .back { display: inline-block; margin-top: 1.5rem; color: #6366f1; text-decoration: none; font-weight: 600; }
+    .back:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h1>One-time Google Setup</h1>
+  <p>A <code>credentials.json</code> file is missing. Follow these steps once to create your Google OAuth credentials:</p>
+  <ol>
+    <li>Go to <strong>console.cloud.google.com</strong> and create or select a project.</li>
+    <li>Navigate to <strong>APIs &amp; Services → Library</strong> and enable the <strong>Gmail API</strong>.</li>
+    <li>Go to <strong>APIs &amp; Services → OAuth consent screen</strong>, choose <em>External</em>, fill in the app name and your email, then save.</li>
+    <li>Go to <strong>APIs &amp; Services → Credentials → Create Credentials → OAuth client ID</strong>.</li>
+    <li>Choose <strong>Web application</strong>. Under <em>Authorized redirect URIs</em> add: <code>http://localhost:5000/oauth2callback</code></li>
+    <li>Click <strong>Create</strong>, then download the JSON file.</li>
+    <li>Rename it to <code>credentials.json</code> and place it in the project root (same folder as <code>app.py</code>).</li>
+    <li>Restart the app and click <strong>Connect Gmail</strong> again.</li>
+  </ol>
+  <a href="/" class="back">← Back to home</a>
+</div>
+</body>
+</html>
