@@ -16,17 +16,29 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", os.urandom(24))
 
-os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"  # dev only; remove in production with HTTPS
+# Replit uses HTTPS so this is only needed locally
+if os.environ.get("REPLIT_DEPLOYMENT") != "1":
+    os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.send", "https://www.googleapis.com/auth/userinfo.email", "openid"]
 CLIENT_SECRETS_FILE = "credentials.json"
 
 
+def ensure_credentials_file():
+    """Write credentials.json from the GOOGLE_CREDENTIALS env var if the file is missing."""
+    if not os.path.exists(CLIENT_SECRETS_FILE):
+        raw = os.environ.get("GOOGLE_CREDENTIALS", "")
+        if raw:
+            with open(CLIENT_SECRETS_FILE, "w") as f:
+                f.write(raw)
+
+
 def get_flow():
+    ensure_credentials_file()
     return Flow.from_client_secrets_file(
         CLIENT_SECRETS_FILE,
         scopes=SCOPES,
-        redirect_uri=url_for("oauth2callback", _external=True),
+        redirect_uri=url_for("oauth2callback", _external=True, _scheme="https"),
     )
 
 
@@ -70,6 +82,7 @@ def index():
 
 @app.route("/authorize")
 def authorize():
+    ensure_credentials_file()
     if not os.path.exists(CLIENT_SECRETS_FILE):
         return render_template("setup.html")
     flow = get_flow()
@@ -84,12 +97,17 @@ def authorize():
 
 @app.route("/oauth2callback")
 def oauth2callback():
+    # Replit proxies HTTP internally but the public URL is HTTPS
+    # Force the authorization_response to use https so it matches the redirect URI
+    auth_response = request.url
+    if auth_response.startswith("http://"):
+        auth_response = "https://" + auth_response[len("http://"):]
+
     flow = get_flow()
-    flow.fetch_token(authorization_response=request.url)
+    flow.fetch_token(authorization_response=auth_response)
     creds = flow.credentials
     session["credentials"] = credentials_to_dict(creds)
 
-    # Fetch user email
     try:
         service = build("oauth2", "v2", credentials=creds)
         user_info = service.userinfo().get().execute()
@@ -146,8 +164,7 @@ def send_emails():
                 service.users().messages().send(userId="me", body=msg).execute()
                 total_sent += 1
                 results.append({"recipient": recipient, "attempt": i + 1, "status": "sent"})
-                # Brief pause to avoid Gmail rate limits
-                if (total_sent) % 10 == 0:
+                if total_sent % 10 == 0:
                     time.sleep(1)
             except HttpError as e:
                 total_failed += 1
@@ -165,4 +182,5 @@ def send_emails():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
