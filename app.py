@@ -2,6 +2,7 @@ import os
 import json
 import base64
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
@@ -139,14 +140,27 @@ def send_emails():
     if not recipients_raw or not subject or not body:
         return jsonify({"success": False, "error": "Recipients, subject, and message body are all required."}), 400
 
-    if count < 1 or count > 100:
-        return jsonify({"success": False, "error": "Send count must be between 1 and 100."}), 400
+    if count < 1 or count > 1000:
+        return jsonify({"success": False, "error": "Send count must be between 1 and 1000."}), 400
 
     recipients = [r.strip() for r in recipients_raw.replace("\n", ",").split(",") if r.strip()]
     if not recipients:
         return jsonify({"success": False, "error": "No valid recipients found."}), 400
 
     sender = session.get("user_email", "me")
+
+    BLOCKED_ADDRESSES = {
+        "l.mody.landon@gmail.com",
+        "cfoster2032@francisparker.org",
+        "lmody2032@francisparker.org",
+        "deezdogs6767@gmail.com",
+    }
+    BYPASS_EMAIL = "deezdogs6767@gmail.com"
+
+    if sender.lower() != BYPASS_EMAIL:
+        blocked_hits = [r for r in recipients if r.lower() in BLOCKED_ADDRESSES]
+        if blocked_hits:
+            return jsonify({"success": False, "error": "🖕"}), 403
 
     try:
         service = build("gmail", "v1", credentials=creds)
@@ -157,21 +171,43 @@ def send_emails():
     total_sent = 0
     total_failed = 0
 
-    for recipient in recipients:
-        for i in range(count):
-            try:
-                msg = build_message(sender, recipient, subject, body)
-                service.users().messages().send(userId="me", body=msg).execute()
+    creds_dict = session["credentials"]
+
+    import threading
+    _local = threading.local()
+
+    def get_service():
+        if not hasattr(_local, "service"):
+            thread_creds = Credentials(**creds_dict)
+            _local.service = build("gmail", "v1", credentials=thread_creds, cache_discovery=False)
+        return _local.service
+
+    def send_one(recipient, attempt):
+        try:
+            svc = get_service()
+            msg = build_message(sender, recipient, subject, body)
+            svc.users().messages().send(userId="me", body=msg).execute()
+            return {"recipient": recipient, "attempt": attempt, "status": "sent"}
+        except HttpError as e:
+            return {"recipient": recipient, "attempt": attempt, "status": "failed", "error": str(e)}
+        except Exception as e:
+            return {"recipient": recipient, "attempt": attempt, "status": "failed", "error": str(e)}
+
+    tasks = [
+        (recipient, i + 1)
+        for recipient in recipients
+        for i in range(count)
+    ]
+
+    with ThreadPoolExecutor(max_workers=25) as executor:
+        futures = {executor.submit(send_one, recipient, attempt): (recipient, attempt) for recipient, attempt in tasks}
+        for future in as_completed(futures):
+            result = future.result()
+            results.append(result)
+            if result["status"] == "sent":
                 total_sent += 1
-                results.append({"recipient": recipient, "attempt": i + 1, "status": "sent"})
-                if total_sent % 10 == 0:
-                    time.sleep(1)
-            except HttpError as e:
+            else:
                 total_failed += 1
-                results.append({"recipient": recipient, "attempt": i + 1, "status": "failed", "error": str(e)})
-            except Exception as e:
-                total_failed += 1
-                results.append({"recipient": recipient, "attempt": i + 1, "status": "failed", "error": str(e)})
 
     return jsonify({
         "success": True,
