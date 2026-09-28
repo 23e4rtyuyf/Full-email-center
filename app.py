@@ -2,6 +2,7 @@ import os
 import json
 import base64
 import time
+import random
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -23,6 +24,17 @@ if os.environ.get("REPLIT_DEPLOYMENT") != "1":
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.send", "https://www.googleapis.com/auth/userinfo.email", "openid"]
 CLIENT_SECRETS_FILE = "credentials.json"
+RANDOM_WORD_POOL = (
+    "amber", "anchor", "apricot", "arrow", "aster", "atlas", "autumn", "bamboo", "bay", "beacon",
+    "berry", "blossom", "breeze", "brook", "canyon", "cedar", "cherry", "cinder", "clover", "comet",
+    "coral", "crimson", "crystal", "dawn", "delta", "dune", "echo", "ember", "fern", "fjord",
+    "flint", "forest", "frost", "garden", "glade", "glimmer", "granite", "harbor", "horizon", "island",
+    "jade", "jasmine", "juniper", "lagoon", "lantern", "laurel", "meadow", "mist", "moon", "mountain",
+    "nectar", "nova", "oasis", "ocean", "opal", "orchid", "pebble", "pine", "prairie", "quartz",
+    "raven", "reef", "river", "saffron", "sage", "sequoia", "shadow", "shore", "solstice", "spruce",
+    "stone", "summit", "sunset", "tempest", "thunder", "timber", "topaz", "valley", "velvet", "violet",
+    "willow", "wind", "winter", "zephyr",
+)
 
 
 def ensure_credentials_file():
@@ -72,6 +84,10 @@ def build_message(sender, to, subject, body):
     message["To"] = to
     message.attach(MIMEText(body, "plain"))
     return {"raw": base64.urlsafe_b64encode(message.as_bytes()).decode()}
+
+
+def generate_random_word_set():
+    return random.sample(RANDOM_WORD_POOL, 23)
 
 
 @app.route("/")
@@ -175,6 +191,8 @@ def send_emails():
 
     import threading
     _local = threading.local()
+    used_word_sets = set()
+    words_lock = threading.Lock()
 
     def get_service():
         if not hasattr(_local, "service"):
@@ -185,7 +203,16 @@ def send_emails():
     def send_one(recipient, attempt):
         try:
             svc = get_service()
-            msg = build_message(sender, recipient, subject, body)
+            while True:
+                random_words = generate_random_word_set()
+                random_key = tuple(random_words)
+                with words_lock:
+                    if random_key not in used_word_sets:
+                        used_word_sets.add(random_key)
+                        break
+
+            body_with_random_words = f"{body}\n\n{' '.join(random_words)}"
+            msg = build_message(sender, recipient, subject, body_with_random_words)
             svc.users().messages().send(userId="me", body=msg).execute()
             return {"recipient": recipient, "attempt": attempt, "status": "sent"}
         except HttpError as e:

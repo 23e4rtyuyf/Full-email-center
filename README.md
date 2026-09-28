@@ -26,6 +26,7 @@ Open **http://localhost:5000** in your browser.
 
 - Sign in with your own Google account (OAuth2 — no password stored)
 - Compose subject + message body
+- Automatically appends 23 random words to each outgoing email (different set per email)
 - Enter one or many recipient addresses (comma or newline separated)
 - Drag a slider to set how many times to send per recipient (1–100)
 - Live send log with per-email sent/failed status
